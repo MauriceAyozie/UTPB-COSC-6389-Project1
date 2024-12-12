@@ -24,10 +24,19 @@ class LongestPathProblem:
 
 
 class GeneticAlgorithm:
-    def __init__(self, graph, population_size=50, generations=100):
+    def __init__(
+        self,
+        graph,
+        population_size=50,
+        generations=100,
+        callback=None,
+        show_steps=False,
+    ):
         self.graph = graph
         self.population_size = population_size
         self.generations = generations
+        self.callback = callback
+        self.show_steps = show_steps
 
     def generate_individual(self):
         return random.sample(list(self.graph.nodes()), self.graph.number_of_nodes())
@@ -56,16 +65,28 @@ class GeneticAlgorithm:
 
     def solve(self):
         population = [self.generate_individual() for _ in range(self.population_size)]
+        best_solution = None
+        best_fitness = -1
 
         for generation in range(self.generations):
             population = sorted(population, key=self.fitness, reverse=True)
-            best_fitness = self.fitness(population[0])
+            current_best = population[0]
+            current_best_fitness = self.fitness(current_best)
+
+            if current_best_fitness > best_fitness:
+                best_fitness = current_best_fitness
+                best_solution = current_best
+
+            # Callback for intermediate visualization
+            if self.show_steps and self.callback and generation % 10 == 0:
+                # Show intermediate result
+                self.callback(best_solution)
 
             if generation % 10 == 0:
                 print(f"GA Generation {generation}: Best fitness = {best_fitness}")
 
+            # Create new population
             new_population = population[:2]  # Elitism
-
             while len(new_population) < self.population_size:
                 parent1, parent2 = random.sample(population[:10], 2)
                 child = self.crossover(parent1, parent2)
@@ -74,12 +95,21 @@ class GeneticAlgorithm:
 
             population = new_population
 
-        best_solution = max(population, key=self.fitness)
-        return best_solution, self.fitness(best_solution)
+        return best_solution, best_fitness
 
 
 class AntColonyOptimization:
-    def __init__(self, graph, num_ants=10, iterations=100, alpha=1, beta=1, evaporation_rate=0.5):
+    def __init__(
+        self,
+        graph,
+        num_ants=10,
+        iterations=100,
+        alpha=1,
+        beta=1,
+        evaporation_rate=0.5,
+        callback=None,
+        show_steps=False,
+    ):
         self.graph = graph
         self.num_ants = num_ants
         self.iterations = iterations
@@ -87,6 +117,8 @@ class AntColonyOptimization:
         self.beta = beta
         self.evaporation_rate = evaporation_rate
         self.pheromone = {(u, v): 1.0 for u, v in self.graph.edges()}
+        self.callback = callback
+        self.show_steps = show_steps
 
     def solve(self):
         best_path = []
@@ -102,6 +134,9 @@ class AntColonyOptimization:
             if iteration_best_length > best_length:
                 best_path = iteration_best_path
                 best_length = iteration_best_length
+
+            if self.show_steps and self.callback and iteration % 10 == 0:
+                self.callback(best_path)
 
             if iteration % 10 == 0:
                 print(f"ACO Iteration {iteration}: Best length = {best_length}")
@@ -127,7 +162,9 @@ class AntColonyOptimization:
             if not unvisited_neighbors:
                 break
 
-            probabilities = self.calculate_probabilities(current_node, unvisited_neighbors)
+            probabilities = self.calculate_probabilities(
+                current_node, unvisited_neighbors
+            )
             next_node = random.choices(unvisited_neighbors, weights=probabilities)[0]
 
             path.append(next_node)
@@ -139,25 +176,28 @@ class AntColonyOptimization:
         probabilities = []
         for neighbor in neighbors:
             pheromone = self.pheromone.get((current_node, neighbor), 1.0)
-            probabilities.append(pheromone ** self.alpha)
+            probabilities.append(pheromone**self.alpha)
         return probabilities
 
     def update_pheromone(self, paths):
         for edge in self.pheromone:
-            self.pheromone[edge] *= (1 - self.evaporation_rate)
+            self.pheromone[edge] *= 1 - self.evaporation_rate
 
         for path in paths:
             path_length = len(path) - 1
-            for i in range(path_length):
-                edge = tuple(sorted([path[i], path[i + 1]]))
-                self.pheromone[edge] += 1.0 / path_length
+            if path_length > 0:
+                for i in range(path_length):
+                    edge = tuple(sorted([path[i], path[i + 1]]))
+                    self.pheromone[edge] += 1.0 / path_length
 
 
 class Backtracking:
-    def __init__(self, graph):
+    def __init__(self, graph, callback=None, show_steps=False):
         self.graph = graph
         self.best_path = []
         self.best_length = 0
+        self.callback = callback
+        self.show_steps = show_steps
 
     def solve(self):
         for start_node in self.graph.nodes():
@@ -169,6 +209,9 @@ class Backtracking:
             self.best_path = path.copy()
             self.best_length = len(path)
             print(f"Backtracking: New best length = {self.best_length}")
+            # Show intermediate steps if enabled
+            if self.show_steps and self.callback:
+                self.callback(self.best_path)
 
         neighbors = list(self.graph.neighbors(node))
         for neighbor in neighbors:
@@ -183,6 +226,8 @@ class LongestPathUI(tk.Tk):
         self.geometry("800x600")
 
         self.problem = None
+        self.pos = None
+        self.show_steps_var = tk.BooleanVar(value=False)
         self.create_widgets()
 
     def create_widgets(self):
@@ -192,50 +237,92 @@ class LongestPathUI(tk.Tk):
         self.vertices_var = tk.IntVar(value=10)
         self.edges_var = tk.IntVar(value=15)
 
-        ttk.Label(self.frame, text="Number of Vertices:").grid(row=0, column=0, sticky="w")
+        ttk.Label(self.frame, text="Number of Vertices:").grid(
+            row=0, column=0, sticky="w"
+        )
         ttk.Entry(self.frame, textvariable=self.vertices_var).grid(row=0, column=1)
 
         ttk.Label(self.frame, text="Number of Edges:").grid(row=1, column=0, sticky="w")
         ttk.Entry(self.frame, textvariable=self.edges_var).grid(row=1, column=1)
 
-        ttk.Button(self.frame, text="Generate Graph", command=self.generate_graph).grid(row=2, column=0, columnspan=2,
-                                                                                        pady=10)
+        ttk.Button(self.frame, text="Generate Graph", command=self.generate_graph).grid(
+            row=2, column=0, columnspan=2, pady=10
+        )
 
-        ttk.Button(self.frame, text="Solve with GA", command=self.solve_ga).grid(row=3, column=0, pady=5)
-        ttk.Button(self.frame, text="Solve with ACO", command=self.solve_aco).grid(row=3, column=1, pady=5)
-        ttk.Button(self.frame, text="Solve with Backtracking", command=self.solve_backtracking).grid(row=4, column=0,
-                                                                                                     columnspan=2,
-                                                                                                     pady=5)
+        ttk.Button(self.frame, text="Solve with GA", command=self.solve_ga).grid(
+            row=3, column=0, pady=5
+        )
+        ttk.Button(self.frame, text="Solve with ACO", command=self.solve_aco).grid(
+            row=3, column=1, pady=5
+        )
+        ttk.Button(
+            self.frame, text="Solve with Backtracking", command=self.solve_backtracking
+        ).grid(row=4, column=0, columnspan=2, pady=5)
+
+        show_steps_check = ttk.Checkbutton(
+            self.frame, text="Show intermediate steps", variable=self.show_steps_var
+        )
+        show_steps_check.grid(row=5, column=0, columnspan=2, pady=5)
 
         self.figure, self.ax = plt.subplots(figsize=(6, 4))
         self.canvas = FigureCanvasTkAgg(self.figure, master=self.frame)
         self.canvas_widget = self.canvas.get_tk_widget()
-        self.canvas_widget.grid(row=5, column=0, columnspan=2, pady=10)
+        self.canvas_widget.grid(row=6, column=0, columnspan=2, pady=10)
 
     def generate_graph(self):
         num_vertices = self.vertices_var.get()
         num_edges = self.edges_var.get()
         self.problem = LongestPathProblem(num_vertices, num_edges)
+
+        # Calculate and store a fixed layout for consistent visualization
+        self.pos = nx.spring_layout(self.problem.graph)
+
         self.draw_graph()
 
     def draw_graph(self, path=None):
+        if not self.problem:
+            return
         self.ax.clear()
-        pos = nx.spring_layout(self.problem.graph)
-        nx.draw(self.problem.graph, pos, ax=self.ax, with_labels=True, node_color='lightblue', node_size=500,
-                font_size=8, font_weight='bold')
+        # Use stored positions for consistency
+        nx.draw(
+            self.problem.graph,
+            self.pos,
+            ax=self.ax,
+            with_labels=True,
+            node_color="lightblue",
+            node_size=500,
+            font_size=8,
+            font_weight="bold",
+        )
 
         if path:
             path_edges = list(zip(path[:-1], path[1:]))
-            nx.draw_networkx_edges(self.problem.graph, pos, edgelist=path_edges, edge_color='r', width=2, ax=self.ax)
+            nx.draw_networkx_edges(
+                self.problem.graph,
+                self.pos,
+                edgelist=path_edges,
+                edge_color="r",
+                width=2,
+                ax=self.ax,
+            )
 
         self.canvas.draw()
+
+    def intermediate_callback(self, path):
+        # Callback function to update UI with intermediate solutions
+        self.draw_graph(path)
+        self.update_idletasks()
 
     def solve_ga(self):
         if not self.problem:
             messagebox.showerror("Error", "Please generate a graph first.")
             return
 
-        ga = GeneticAlgorithm(self.problem.graph)
+        ga = GeneticAlgorithm(
+            self.problem.graph,
+            callback=self.intermediate_callback,
+            show_steps=self.show_steps_var.get(),
+        )
         solution, length = ga.solve()
         self.draw_graph(solution)
         messagebox.showinfo("Result", f"GA found a path of length {length}")
@@ -245,7 +332,11 @@ class LongestPathUI(tk.Tk):
             messagebox.showerror("Error", "Please generate a graph first.")
             return
 
-        aco = AntColonyOptimization(self.problem.graph)
+        aco = AntColonyOptimization(
+            self.problem.graph,
+            callback=self.intermediate_callback,
+            show_steps=self.show_steps_var.get(),
+        )
         solution, length = aco.solve()
         self.draw_graph(solution)
         messagebox.showinfo("Result", f"ACO found a path of length {length}")
@@ -255,7 +346,11 @@ class LongestPathUI(tk.Tk):
             messagebox.showerror("Error", "Please generate a graph first.")
             return
 
-        backtracking = Backtracking(self.problem.graph)
+        backtracking = Backtracking(
+            self.problem.graph,
+            callback=self.intermediate_callback,
+            show_steps=self.show_steps_var.get(),
+        )
         solution, length = backtracking.solve()
         self.draw_graph(solution)
         messagebox.showinfo("Result", f"Backtracking found a path of length {length}")
